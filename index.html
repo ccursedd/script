@@ -686,6 +686,62 @@ nav {
 .profile-info .email { font-size: 13px; color: var(--text2); }
 .profile-info .joined { font-size: 12px; color: var(--text3); margin-top: 3px; }
 
+/* PFP UPLOAD */
+.ava-wrap {
+  position: relative;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.ava-wrap:hover .ava-overlay { opacity: 1; }
+.ava-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.55);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+.ava-overlay svg { color: #fff; }
+.ava-wrap input[type=file] { display: none; }
+
+/* NAV AVATAR WITH PFP */
+.avatar img, .profile-ava img, .mini-avatar img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+/* PFP PREVIEW in modal */
+.pfp-preview-ring {
+  width: 90px; height: 90px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--purple), var(--blue));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32px; font-weight: 800; color: #fff;
+  margin: 0 auto 20px;
+  border: 3px solid var(--line2);
+  overflow: hidden;
+  position: relative;
+  transition: border-color 0.2s;
+}
+.pfp-preview-ring.has-img { border-color: var(--a); box-shadow: 0 0 20px rgba(232,255,71,0.25); }
+
+.pfp-drop-zone {
+  border: 2px dashed var(--line2);
+  border-radius: var(--r2);
+  padding: 22px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  position: relative;
+}
+.pfp-drop-zone:hover, .pfp-drop-zone.drag { border-color: var(--a); background: rgba(232,255,71,0.04); }
+.pfp-drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.pfp-drop-title { font-size: 14px; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
+.pfp-drop-sub { font-size: 12px; color: var(--text3); }
+
 /* ===== MODAL ===== */
 .overlay {
   display: none;
@@ -928,11 +984,17 @@ nav {
   <div id="profilePage" class="page">
     <div class="profile-wrap">
       <div class="profile-card">
-        <div class="profile-ava" id="profAva">U</div>
+        <div class="ava-wrap" onclick="openOverlay('pfpOverlay')" title="Change profile picture">
+          <div class="profile-ava" id="profAva">U</div>
+          <div class="ava-overlay">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          </div>
+        </div>
         <div class="profile-info">
           <h2 id="profName">—</h2>
           <div class="email" id="profEmail">—</div>
           <div class="joined" id="profJoined">—</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px;">Click avatar to change photo</div>
         </div>
         <button class="btn btn-primary btn-sm" style="margin-left:auto;" onclick="openOverlay('uploadOverlay')">+ Upload Script</button>
       </div>
@@ -1059,6 +1121,34 @@ nav {
   </div>
 </div>
 
+<!-- PFP CHANGE -->
+<div class="overlay" id="pfpOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="modal-title">Change profile picture</span>
+      <div class="modal-close" onclick="closeOverlay('pfpOverlay')">✕</div>
+    </div>
+    <div class="modal-body">
+      <div class="pfp-preview-ring" id="pfpPreviewRing">
+        <span id="pfpPreviewInitial">U</span>
+      </div>
+      <div class="pfp-drop-zone" id="pfpDropZone"
+        ondragover="event.preventDefault();this.classList.add('drag')"
+        ondragleave="this.classList.remove('drag')"
+        ondrop="handlePfpDrop(event)">
+        <input type="file" id="pfpFileInput" accept="image/png,image/jpeg,image/gif,image/webp" onchange="handlePfpFile(this.files[0])">
+        <div class="pfp-drop-title">Click or drag an image here</div>
+        <div class="pfp-drop-sub">PNG, JPG, GIF or WebP · Max 2MB</div>
+      </div>
+      <div id="pfpError" style="font-size:12px;color:var(--red);margin-top:10px;display:none;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost btn-sm" onclick="closeOverlay('pfpOverlay');clearPfpPreview()">Cancel</button>
+      <button class="btn btn-primary btn-md" id="pfpSaveBtn" onclick="savePfp()" disabled style="opacity:0.5;cursor:not-allowed;">Save Picture</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOASTS -->
 <div class="toasts" id="toastBox"></div>
 
@@ -1083,6 +1173,8 @@ let filtered = [];
 let filterMode = 'all';
 let searchQ = '';
 let activeScript = null;
+let pfpDataUrl = null;   // pending preview
+let pfpFile = null;      // pending file
 
 // ─────────────────────────────────────────────
 // SUPABASE
@@ -1413,7 +1505,13 @@ function syncUserUI() {
     g.style.display = 'none';
     u.style.display = 'flex';
     const initials = getUsername().charAt(0).toUpperCase();
-    document.getElementById('navAvatar').textContent = initials;
+    const pfp = getPfpUrl();
+    const navAva = document.getElementById('navAvatar');
+    if (pfp) {
+      navAva.innerHTML = `<img src="${pfp}" alt="pfp">`;
+    } else {
+      navAva.textContent = initials;
+    }
   } else {
     g.style.display = 'flex';
     u.style.display = 'none';
@@ -1463,8 +1561,16 @@ function loadProfile() {
   const name    = getUsername();
   const email   = user.user?.email || '';
   const created = user.user?.created_at ? new Date(user.user.created_at).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }) : 'Recently';
-  document.getElementById('profAva').textContent  = name.charAt(0).toUpperCase();
-  document.getElementById('profName').textContent = name;
+
+  const pfp = getPfpUrl();
+  const profAva = document.getElementById('profAva');
+  if (pfp) {
+    profAva.innerHTML = `<img src="${pfp}" alt="pfp" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+  } else {
+    profAva.textContent = name.charAt(0).toUpperCase();
+  }
+
+  document.getElementById('profName').textContent  = name;
   document.getElementById('profEmail').textContent = email;
   document.getElementById('profJoined').textContent = `Joined ${created}`;
 
@@ -1490,6 +1596,19 @@ function showPage(p) {
 // ─────────────────────────────────────────────
 function openOverlay(id) {
   document.getElementById(id).classList.add('open');
+  if (id === 'pfpOverlay' && user) {
+    const pfp = getPfpUrl();
+    const ring = document.getElementById('pfpPreviewRing');
+    if (ring) {
+      if (pfp) {
+        ring.innerHTML = `<img src="${pfp}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+        ring.classList.add('has-img');
+      } else {
+        ring.innerHTML = `<span>${getUsername().charAt(0).toUpperCase()}</span>`;
+        ring.classList.remove('has-img');
+      }
+    }
+  }
 }
 function closeOverlay(id) {
   document.getElementById(id).classList.remove('open');
@@ -1548,6 +1667,147 @@ function relDate(iso) {
   if (d < 30)  return `${d}d ago`;
   if (d < 365) return `${Math.floor(d/30)}mo ago`;
   return `${Math.floor(d/365)}y ago`;
+}
+
+// ─────────────────────────────────────────────
+// PROFILE PICTURE
+// ─────────────────────────────────────────────
+
+function getPfpUrl() {
+  // Stored in user metadata or localStorage fallback
+  const uid = user?.user?.id;
+  if (!uid) return null;
+  return localStorage.getItem(`clat_pfp_${uid}`) || user?.user?.user_metadata?.avatar_url || null;
+}
+
+function handlePfpDrop(e) {
+  e.preventDefault();
+  document.getElementById('pfpDropZone').classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file) handlePfpFile(file);
+}
+
+function handlePfpFile(file) {
+  const errEl = document.getElementById('pfpError');
+  errEl.style.display = 'none';
+
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    errEl.textContent = 'Please select an image file.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    errEl.textContent = 'Image must be under 2MB.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  pfpFile = file;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    pfpDataUrl = e.target.result;
+    showPfpPreview(pfpDataUrl);
+  };
+  reader.readAsDataURL(file);
+}
+
+function showPfpPreview(dataUrl) {
+  const ring = document.getElementById('pfpPreviewRing');
+  ring.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+  ring.classList.add('has-img');
+
+  const btn = document.getElementById('pfpSaveBtn');
+  btn.disabled = false;
+  btn.style.opacity = '1';
+  btn.style.cursor = 'pointer';
+}
+
+function clearPfpPreview() {
+  pfpDataUrl = null;
+  pfpFile = null;
+  const ring = document.getElementById('pfpPreviewRing');
+  ring.classList.remove('has-img');
+  ring.innerHTML = `<span id="pfpPreviewInitial">${getUsername().charAt(0).toUpperCase()}</span>`;
+  const btn = document.getElementById('pfpSaveBtn');
+  btn.disabled = true;
+  btn.style.opacity = '0.5';
+  btn.style.cursor = 'not-allowed';
+  document.getElementById('pfpError').style.display = 'none';
+  document.getElementById('pfpFileInput').value = '';
+}
+
+async function savePfp() {
+  if (!pfpDataUrl || !user) return;
+
+  const btn = document.getElementById('pfpSaveBtn');
+  btn.textContent = 'Saving…';
+  btn.disabled = true;
+
+  try {
+    // Try uploading to Supabase Storage first
+    const uid = user.user?.id;
+    const ext = pfpFile?.type?.split('/')[1] || 'jpg';
+    const path = `avatars/${uid}.${ext}`;
+
+    const uploadRes = await fetch(`${SB_URL}/storage/v1/object/avatars/${uid}.${ext}`, {
+      method: 'POST',
+      headers: {
+        'apikey': SB_KEY,
+        'Authorization': `Bearer ${user.access_token || SB_KEY}`,
+        'Content-Type': pfpFile?.type || 'image/jpeg',
+        'x-upsert': 'true'
+      },
+      body: pfpFile
+    });
+
+    let finalUrl = pfpDataUrl; // fallback: use base64 stored in localStorage
+
+    if (uploadRes.ok) {
+      const publicUrl = `${SB_URL}/storage/v1/object/public/avatars/${uid}.${ext}?t=${Date.now()}`;
+      finalUrl = publicUrl;
+    }
+
+    // Always store in localStorage as fallback/cache
+    localStorage.setItem(`clat_pfp_${uid}`, finalUrl);
+
+    // Try to update Supabase user metadata
+    if (user.access_token) {
+      await fetch(`${SB_URL}/auth/v1/user`, {
+        method: 'PUT',
+        headers: { ...H, 'Authorization': `Bearer ${user.access_token}` },
+        body: JSON.stringify({ data: { avatar_url: finalUrl, username: getUsername() } })
+      });
+    }
+
+    // Update live session
+    if (user.user) user.user.user_metadata = { ...user.user.user_metadata, avatar_url: finalUrl };
+    localStorage.setItem('clat_sess', JSON.stringify(user));
+
+    closeOverlay('pfpOverlay');
+    clearPfpPreview();
+    syncUserUI();
+    loadProfile();
+    toast('Profile picture updated!', 's');
+
+  } catch(err) {
+    console.error('PFP save error:', err);
+    // Still save locally even if storage fails
+    const uid = user.user?.id;
+    localStorage.setItem(`clat_pfp_${uid}`, pfpDataUrl);
+    if (user.user) user.user.user_metadata = { ...user.user.user_metadata, avatar_url: pfpDataUrl };
+    localStorage.setItem('clat_sess', JSON.stringify(user));
+
+    closeOverlay('pfpOverlay');
+    clearPfpPreview();
+    syncUserUI();
+    loadProfile();
+    toast('Profile picture saved locally!', 's');
+  } finally {
+    btn.textContent = 'Save Picture';
+    btn.disabled = false;
+    btn.style.opacity = '1';
+  }
 }
 
 // ─────────────────────────────────────────────
