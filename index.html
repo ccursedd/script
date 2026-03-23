@@ -199,9 +199,9 @@
   }
   .info-row:last-child { border-bottom: none; }
   .info-label { color: var(--muted); }
-  .info-value { color: var(--text); }
+  .info-value { color: var(--text); font-family: 'Share Tech Mono', monospace; }
 
-  /* PASTES TABLE */
+  /* PASTES TABLE (used for usernames list) */
   .table { width: 100%; border-collapse: collapse; }
   .table th {
     text-align: left;
@@ -240,6 +240,8 @@
     padding: 28px;
     width: 420px;
     max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
   }
   .modal h2 {
     font-family: 'Bebas Neue', sans-serif;
@@ -388,7 +390,6 @@
   .score-name { flex: 1; color: var(--accent2); }
   .score-stat { color: var(--muted); font-size: 11px; }
 
-  /* HIDDEN INPUT */
   .file-input { display: none; }
 
   /* SEARCH */
@@ -411,26 +412,33 @@
   .center { text-align: center; color: var(--muted); font-size: 12px; padding: 20px; }
   .flex { display: flex; gap: 12px; align-items: center; }
   .ml-auto { margin-left: auto; }
+
+  /* URL SHARE ROW */
+  .url-share {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #0d0d0d;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 8px 12px;
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 1px;
+    margin-top: 8px;
+    cursor: pointer;
+    user-select: none;
+    transition: border-color .15s;
+  }
+  .url-share:hover { border-color: var(--accent); }
+  .url-share span { flex: 1; font-family: 'Share Tech Mono', monospace; }
+  .url-share .copy-icon { color: var(--muted); font-size: 10px; }
+  .url-share:hover .copy-icon { color: var(--accent); }
 </style>
 </head>
 <body>
 
 <div id="toast"></div>
-
-<!-- NAV -->
-<nav>
-  <span class="nav-logo" onclick="showPage('home')">cursed.lat</span>
-  <div class="nav-links">
-    <a onclick="showPage('home')">Home</a>
-    <a onclick="showPage('claim')">Claim Username</a>
-    <a onclick="showPage('users')">Users</a>
-    <a onclick="showPage('leaderboard')">Leaderboard</a>
-  </div>
-  <div class="nav-right">
-    <span id="nav-online"><span class="online-dot"></span><span id="nav-count">0</span></span>
-    <a class="nav-user" id="nav-user-link" onclick="handleNavUser()">Login</a>
-  </div>
-</nav>
 
 <!-- AUTH MODAL -->
 <div class="modal-bg" id="auth-modal">
@@ -462,11 +470,11 @@
       <input id="edit-tag" placeholder="e.g. wsp g" maxlength="40">
     </div>
     <div class="form-group">
-      <label>Avatar URL (or use upload button)</label>
+      <label>Avatar URL (or click avatar to upload)</label>
       <input id="edit-avatar" placeholder="https://...">
     </div>
     <div class="form-group">
-      <label>Banner URL (or use upload button)</label>
+      <label>Banner URL (or click banner to upload)</label>
       <input id="edit-banner" placeholder="https://...">
     </div>
     <div id="edit-error" class="error-msg"></div>
@@ -493,6 +501,31 @@
   </div>
 </div>
 
+<!-- FOLLOWERS MODAL -->
+<div class="modal-bg" id="follow-modal">
+  <div class="modal">
+    <h2 id="follow-modal-title">Followers</h2>
+    <div id="follow-modal-list"><div class="center">Loading...</div></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('follow-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav>
+  <span class="nav-logo" onclick="navigateTo('')">cursed.lat</span>
+  <div class="nav-links">
+    <a onclick="navigateTo('')">Home</a>
+    <a onclick="navigateTo('claim')">Claim Username</a>
+    <a onclick="navigateTo('users')">Users</a>
+    <a onclick="navigateTo('leaderboard')">Leaderboard</a>
+  </div>
+  <div class="nav-right">
+    <a class="nav-user" id="nav-user-link" onclick="handleNavUser()">Login</a>
+  </div>
+</nav>
+
 <!-- PAGES -->
 
 <!-- HOME -->
@@ -511,6 +544,7 @@
     <div class="username-showcase">
       <p>your new identity</p>
       <h1 id="claim-preview">cursed.lat</h1>
+      <p id="claim-url-preview" style="margin-top:4px;font-size:12px;color:var(--muted);letter-spacing:1px"></p>
       <p id="claim-status" style="margin-top:8px; color: var(--accent)"></p>
     </div>
     <div class="card">
@@ -561,8 +595,13 @@
         <div class="profile-username" id="profile-username">Username</div>
         <div class="profile-tag" id="profile-tag">tag</div>
         <div class="profile-stats">
-          <span><b id="profile-following">0</b> Following</span>
-          <span><b id="profile-followers">0</b> Followers</span>
+          <span onclick="showFollowModal('following')"><b id="profile-following">0</b> Following</span>
+          <span onclick="showFollowModal('followers')"><b id="profile-followers">0</b> Followers</span>
+        </div>
+        <!-- URL share row -->
+        <div class="url-share" id="profile-url-share" onclick="copyProfileLink()">
+          <span id="profile-url-text">cursed.lat/</span>
+          <span class="copy-icon">[ copy ]</span>
         </div>
       </div>
       <div class="profile-actions" id="profile-actions"></div>
@@ -573,6 +612,7 @@
       <div class="info-table">
         <div class="info-row"><span class="info-label">UID</span><span class="info-value" id="pinfo-uid">—</span></div>
         <div class="info-row"><span class="info-label">Username</span><span class="info-value" id="pinfo-user">—</span></div>
+        <div class="info-row"><span class="info-label">Profile URL</span><span class="info-value" id="pinfo-url">—</span></div>
         <div class="info-row"><span class="info-label">Joined</span><span class="info-value" id="pinfo-joined">—</span></div>
         <div class="info-row"><span class="info-label">Followers</span><span class="info-value" id="pinfo-followers">—</span></div>
       </div>
@@ -596,51 +636,94 @@ const SUPABASE_KEY = 'sb_publishable_jzwY4gU9EmwH5ht330EgBQ_XnTa7Dsz';
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-let currentUser = null; // {id, username, avatar, banner, tag}
+// Detect host — on cursed.lat use that, otherwise use current origin
+const SITE_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? window.location.origin
+  : 'https://cursed.lat';
+
+let currentUser = null;
 let viewingUserId = null;
+let viewingUsername = null;
 let authMode = 'login';
 let allUsers = [];
 
 // ---- INIT ----
 async function init() {
-  await ensureTables();
   loadSession();
-  showPage('home');
-  loadHomeFeeed();
+  updateNavUser();
+  loadHomeFeed();
   loadUsers();
   loadLeaderboard();
-}
-
-async function ensureTables() {
-  // Tables must exist in Supabase. We create them via RPC if needed or just handle gracefully.
+  // Route based on current URL path
+  routePath(window.location.pathname, false);
 }
 
 function loadSession() {
   const s = localStorage.getItem('cursed.lat_user');
-  if (s) {
-    try { currentUser = JSON.parse(s); updateNavUser(); } catch(e) {}
-  }
+  if (s) { try { currentUser = JSON.parse(s); } catch(e) {} }
 }
+
+// ---- URL ROUTING ----
+// navigateTo: slug = '', 'claim', 'users', 'leaderboard', or a username like 'jake'
+async function navigateTo(slug, pushState = true) {
+  slug = (slug || '').toLowerCase().replace(/^\//, '').split('?')[0].split('#')[0].trim();
+
+  const pages = ['', 'home', 'claim', 'users', 'leaderboard'];
+
+  if (slug === '' || slug === 'home') {
+    _showRawPage('home');
+    if (pushState) history.pushState({}, '', '/');
+    document.title = 'cursed.lat';
+    loadHomeFeed();
+    return;
+  }
+
+  if (pages.includes(slug)) {
+    _showRawPage(slug);
+    if (pushState) history.pushState({}, '', `/${slug}`);
+    document.title = `cursed.lat — ${slug}`;
+    if (slug === 'users') loadUsers();
+    if (slug === 'leaderboard') loadLeaderboard();
+    return;
+  }
+
+  // It's a username — look up the user
+  const { data: user } = await db.from('fb_users').select('id,username').eq('username', slug).maybeSingle();
+  if (!user) {
+    toast(`@${slug} not found`, true);
+    _showRawPage('home');
+    if (pushState) history.pushState({}, '', '/');
+    return;
+  }
+
+  _showRawPage('profile');
+  if (pushState) history.pushState({ username: slug }, '', `/${slug}`);
+  document.title = `cursed.lat/${slug}`;
+  loadProfile(user.id);
+}
+
+function _showRawPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const el = document.getElementById('page-' + name);
+  if (el) el.classList.add('active');
+}
+
+function routePath(path, pushState) {
+  const slug = (path || '/').replace(/^\//, '').split('?')[0].split('#')[0].trim();
+  navigateTo(slug, pushState);
+}
+
+window.addEventListener('popstate', () => routePath(window.location.pathname, false));
 
 // ---- NAV ----
 function handleNavUser() {
-  if (currentUser) showPage('profile', currentUser.id);
+  if (currentUser) navigateTo(currentUser.username);
   else openAuthModal();
 }
 function updateNavUser() {
   const el = document.getElementById('nav-user-link');
   if (currentUser) el.textContent = currentUser.username;
   else el.textContent = 'Login';
-}
-
-// ---- PAGES ----
-function showPage(name, userId) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById('page-' + name).classList.add('active');
-  if (name === 'profile') loadProfile(userId);
-  if (name === 'users') loadUsers();
-  if (name === 'leaderboard') loadLeaderboard();
-  if (name === 'home') loadHomeFeeed();
 }
 
 // ---- TOAST ----
@@ -669,18 +752,14 @@ async function doAuth() {
   const errEl = document.getElementById('auth-error');
   errEl.textContent = '';
   if (!username || !password) { errEl.textContent = 'Fill in all fields.'; return; }
-  if (username.length < 3) { errEl.textContent = 'Username too short.'; return; }
+  if (username.length < 3) { errEl.textContent = 'Username too short (min 3).'; return; }
+  if (!/^[a-z0-9_]+$/.test(username)) { errEl.textContent = 'Letters, numbers, underscores only.'; return; }
 
   if (authMode === 'register') {
-    // Check if username taken
     const { data: existing } = await db.from('fb_users').select('id').eq('username', username).maybeSingle();
     if (existing) { errEl.textContent = 'Username already taken.'; return; }
     const { data, error } = await db.from('fb_users').insert({
-      username, password,
-      tag: 'wsp g',
-      avatar: '',
-      banner: '',
-      followers: 0
+      username, password, tag: 'wsp g', avatar: '', banner: '', followers: 0
     }).select().single();
     if (error) { errEl.textContent = error.message; return; }
     currentUser = { id: data.id, username: data.username, avatar: data.avatar, banner: data.banner, tag: data.tag };
@@ -688,7 +767,7 @@ async function doAuth() {
     updateNavUser();
     closeModal('auth-modal');
     toast('Welcome, ' + currentUser.username + '!');
-    showPage('profile', currentUser.id);
+    navigateTo(currentUser.username);
   } else {
     const { data, error } = await db.from('fb_users').select('*').eq('username', username).eq('password', password).maybeSingle();
     if (error || !data) { errEl.textContent = 'Invalid credentials.'; return; }
@@ -697,7 +776,7 @@ async function doAuth() {
     updateNavUser();
     closeModal('auth-modal');
     toast('Welcome back, ' + currentUser.username + '!');
-    showPage('profile', currentUser.id);
+    navigateTo(currentUser.username);
   }
 }
 
@@ -705,14 +784,16 @@ function logout() {
   currentUser = null;
   localStorage.removeItem('cursed.lat_user');
   updateNavUser();
-  showPage('home');
+  navigateTo('');
   toast('Logged out.');
 }
 
 // ---- CLAIM USERNAME ----
 function previewClaim(val) {
-  const el = document.getElementById('claim-preview');
-  el.textContent = val.trim().toUpperCase() || 'cursed.lat';
+  const clean = val.trim().toUpperCase();
+  document.getElementById('claim-preview').textContent = clean || 'cursed.lat';
+  const urlPreview = document.getElementById('claim-url-preview');
+  urlPreview.textContent = val.trim() ? `cursed.lat/${val.trim().toLowerCase()}` : '';
   const statusEl = document.getElementById('claim-status');
   if (val.length >= 3 && val.length <= 5) {
     statusEl.textContent = '🔥 ULTRA RARE (3-5 chars)';
@@ -720,9 +801,11 @@ function previewClaim(val) {
   } else if (val.length <= 8) {
     statusEl.textContent = '⚡ RARE (6-8 chars)';
     statusEl.style.color = '#9966ff';
-  } else {
+  } else if (val.length > 0) {
     statusEl.textContent = '✓ Available length';
     statusEl.style.color = 'var(--accent)';
+  } else {
+    statusEl.textContent = '';
   }
 }
 
@@ -745,27 +828,41 @@ async function claimUsername() {
   toast('Username claimed: ' + val);
   document.getElementById('claim-input').value = '';
   previewClaim('');
+  navigateTo(val);
 }
 
 // ---- PROFILE ----
 async function loadProfile(userId) {
-  if (!userId) userId = currentUser?.id;
-  if (!userId) { showPage('home'); return; }
+  if (!userId) { if (currentUser) userId = currentUser.id; else { navigateTo(''); return; } }
   viewingUserId = userId;
 
   const { data: user, error } = await db.from('fb_users').select('*').eq('id', userId).single();
   if (error || !user) { toast('User not found', true); return; }
 
+  viewingUsername = user.username;
+
+  // Update URL if not already correct
+  const currentPath = window.location.pathname.replace(/^\//, '');
+  if (currentPath !== user.username) {
+    history.pushState({ username: user.username }, '', `/${user.username}`);
+    document.title = `cursed.lat/${user.username}`;
+  }
+
+  // Profile URL display
+  const profileUrl = `${SITE_HOST}/${user.username}`;
+  document.getElementById('profile-url-text').textContent = `cursed.lat/${user.username}`;
+  document.getElementById('pinfo-url').textContent = `cursed.lat/${user.username}`;
+
   document.getElementById('profile-username').textContent = user.username;
   document.getElementById('profile-tag').textContent = user.tag || '';
-  document.getElementById('pinfo-uid').textContent = user.id;
+  document.getElementById('pinfo-uid').textContent = String(user.id).substring(0,8).toUpperCase();
   document.getElementById('pinfo-user').textContent = user.username;
   document.getElementById('pinfo-joined').textContent = new Date(user.created_at).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'});
-  document.getElementById('pinfo-followers').textContent = user.followers || 0;
 
   // Avatar
   const av = document.getElementById('profile-avatar');
-  av.src = user.avatar || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72"><rect width="72" height="72" fill="%231a1a1a"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" fill="%23555" font-size="28">?</text></svg>';
+  av.src = user.avatar || blankAvatar(72);
+  av.onerror = () => av.src = blankAvatar(72);
 
   // Banner
   const bannerImg = document.getElementById('profile-banner-img');
@@ -773,8 +870,10 @@ async function loadProfile(userId) {
   else { bannerImg.style.display = 'none'; }
 
   // Follower counts
-  const { count: fwing } = await db.from('fb_follows').select('*', {count:'exact'}).eq('follower_id', userId);
-  const { count: fwers } = await db.from('fb_follows').select('*', {count:'exact'}).eq('following_id', userId);
+  const [{ count: fwing }, { count: fwers }] = await Promise.all([
+    db.from('fb_follows').select('*', {count:'exact',head:true}).eq('follower_id', userId),
+    db.from('fb_follows').select('*', {count:'exact',head:true}).eq('following_id', userId)
+  ]);
   document.getElementById('profile-following').textContent = fwing || 0;
   document.getElementById('profile-followers').textContent = fwers || 0;
   document.getElementById('pinfo-followers').textContent = fwers || 0;
@@ -811,11 +910,15 @@ async function loadProfile(userId) {
   loadComments(userId);
 }
 
+function copyProfileLink() {
+  const url = `${SITE_HOST}/${viewingUsername}`;
+  navigator.clipboard.writeText(url).then(() => toast('Copied: ' + url));
+}
+
 // ---- FOLLOW ----
 async function follow(targetId) {
   if (!currentUser) { openAuthModal(); return; }
   await db.from('fb_follows').insert({ follower_id: currentUser.id, following_id: targetId });
-  await db.from('fb_users').update({ followers: db.rpc ? undefined : undefined }).eq('id', targetId);
   toast('Followed!');
   loadProfile(targetId);
 }
@@ -825,6 +928,42 @@ async function unfollow(targetId) {
   await db.from('fb_follows').delete().eq('follower_id', currentUser.id).eq('following_id', targetId);
   toast('Unfollowed.');
   loadProfile(targetId);
+}
+
+// ---- FOLLOW MODAL ----
+async function showFollowModal(type) {
+  const modal = document.getElementById('follow-modal');
+  const title = document.getElementById('follow-modal-title');
+  const list = document.getElementById('follow-modal-list');
+  title.textContent = type === 'followers' ? 'Followers' : 'Following';
+  list.innerHTML = '<div class="center">Loading...</div>';
+  modal.classList.add('open');
+
+  let data;
+  if (type === 'followers') {
+    const res = await db.from('fb_follows').select('follower_id').eq('following_id', viewingUserId);
+    const ids = (res.data || []).map(r => r.follower_id);
+    if (!ids.length) { list.innerHTML = '<div class="center">Nobody yet.</div>'; return; }
+    const res2 = await db.from('fb_users').select('id,username,avatar,tag').in('id', ids);
+    data = res2.data || [];
+  } else {
+    const res = await db.from('fb_follows').select('following_id').eq('follower_id', viewingUserId);
+    const ids = (res.data || []).map(r => r.following_id);
+    if (!ids.length) { list.innerHTML = '<div class="center">Not following anyone.</div>'; return; }
+    const res2 = await db.from('fb_users').select('id,username,avatar,tag').in('id', ids);
+    data = res2.data || [];
+  }
+
+  if (!data.length) { list.innerHTML = '<div class="center">Nobody here.</div>'; return; }
+  list.innerHTML = data.map(u => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="closeModal('follow-modal');navigateTo('${u.username}')">
+      <img style="width:36px;height:36px;border-radius:3px;object-fit:cover;background:#1a1a1a" src="${u.avatar || blankAvatar(36)}" onerror="this.src='${blankAvatar(36)}'">
+      <div>
+        <div style="color:var(--accent2);font-size:12px">${escHtml(u.username)}${rareBadge(u.username)}</div>
+        <div style="color:var(--muted);font-size:11px">${escHtml(u.tag || '')}</div>
+      </div>
+    </div>
+  `).join('');
 }
 
 // ---- EDIT PROFILE ----
@@ -849,7 +988,7 @@ async function saveProfile() {
   loadProfile(currentUser.id);
 }
 
-// ---- FILE UPLOAD (base64 stored as URL) ----
+// ---- FILE UPLOAD ----
 function handleAvatarClick() {
   if (!currentUser || currentUser.id !== viewingUserId) return;
   document.getElementById('avatar-input').click();
@@ -901,14 +1040,14 @@ async function submitComment() {
 }
 
 async function loadComments(userId) {
-  const { data, error } = await db.from('fb_comments').select('*').eq('user_id', userId).order('created_at', {ascending: false});
+  const { data } = await db.from('fb_comments').select('*').eq('user_id', userId).order('created_at', {ascending: false});
   const el = document.getElementById('profile-comments');
   if (!data || data.length === 0) { el.innerHTML = '<div class="center">No comments yet.</div>'; return; }
   el.innerHTML = data.map(c => `
     <div class="comment">
       <div class="comment-header">
-        <img class="comment-avatar" src="${c.author_avatar || 'data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'28\' height=\'28\'><rect width=\'28\' height=\'28\' fill=\'%231a1a1a\'/></svg>'}" onclick="showPage('profile','${c.author_id}')">
-        <span class="comment-user" onclick="showPage('profile','${c.author_id}')">${escHtml(c.author_username)}</span>
+        <img class="comment-avatar" src="${c.author_avatar || blankAvatar(28)}" onerror="this.src='${blankAvatar(28)}'" onclick="navigateTo('${c.author_username}')">
+        <span class="comment-user" onclick="navigateTo('${c.author_username}')">${escHtml(c.author_username)}</span>
         <span class="comment-time">${timeAgo(c.created_at)}</span>
       </div>
       <div class="comment-body">${escHtml(c.body)}</div>
@@ -927,11 +1066,12 @@ function renderUsers(users) {
   const el = document.getElementById('user-grid');
   if (!users.length) { el.innerHTML = '<div class="center">No users yet.</div>'; return; }
   el.innerHTML = users.map(u => `
-    <div class="user-card" onclick="showPage('profile','${u.id}')">
-      <img class="user-card-avatar" src="${u.avatar || ''}" onerror="this.src='data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'44\' height=\'44\'><rect width=\'44\' height=\'44\' fill=\'%231a1a1a\'/></svg>'">
+    <div class="user-card" onclick="navigateTo('${u.username}')">
+      <img class="user-card-avatar" src="${u.avatar || blankAvatar(44)}" onerror="this.src='${blankAvatar(44)}'">
       <div>
         <div class="user-card-name">${escHtml(u.username)}${rareBadge(u.username)}</div>
         <div class="user-card-tag">${escHtml(u.tag || '')}</div>
+        <div style="color:var(--muted);font-size:10px;letter-spacing:1px;margin-top:2px">cursed.lat/${escHtml(u.username)}</div>
       </div>
     </div>
   `).join('');
@@ -943,6 +1083,7 @@ function filterUsers(q) {
 }
 
 function rareBadge(username) {
+  if (!username) return '';
   if (username.length <= 4) return '<span class="badge badge-og">OG</span>';
   if (username.length <= 6) return '<span class="badge badge-rare">RARE</span>';
   if (username.length <= 8) return '<span class="badge badge-fresh">FRESH</span>';
@@ -954,22 +1095,18 @@ async function loadLeaderboard() {
   const { data } = await db.from('fb_users').select('id,username,avatar,followers').order('followers', {ascending:false}).limit(20);
   const el = document.getElementById('leaderboard-list');
   if (!data || !data.length) { el.innerHTML = '<div class="center">No users yet.</div>'; return; }
-
-  // Get actual follower counts
-  const enriched = await Promise.all((data||[]).map(async (u) => {
-    const { count } = await db.from('fb_follows').select('*',{count:'exact'}).eq('following_id', u.id);
+  const enriched = await Promise.all(data.map(async (u) => {
+    const { count } = await db.from('fb_follows').select('*',{count:'exact',head:true}).eq('following_id', u.id);
     return { ...u, fcount: count || 0 };
   }));
   enriched.sort((a,b) => b.fcount - a.fcount);
-
   el.innerHTML = enriched.map((u, i) => {
     const rankClass = i===0?'gold':i===1?'silver':i===2?'bronze':'';
-    const rankSymbol = i===0?'#1':i===1?'#2':i===2?'#3':`#${i+1}`;
     return `
-      <div class="score-row" onclick="showPage('profile','${u.id}')">
-        <span class="score-rank ${rankClass}">${rankSymbol}</span>
-        <img class="score-avatar" src="${u.avatar||''}" onerror="this.src='data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'32\' height=\'32\'><rect width=\'32\' height=\'32\' fill=\'%231a1a1a\'/></svg>'">
-        <span class="score-name">${escHtml(u.username)}${rareBadge(u.username)}</span>
+      <div class="score-row" onclick="navigateTo('${u.username}')">
+        <span class="score-rank ${rankClass}">#${i+1}</span>
+        <img class="score-avatar" src="${u.avatar||blankAvatar(32)}" onerror="this.src='${blankAvatar(32)}'">
+        <span class="score-name">${escHtml(u.username)}${rareBadge(u.username)}<span style="color:var(--muted);font-size:10px;margin-left:8px">cursed.lat/${escHtml(u.username)}</span></span>
         <span class="score-stat">${u.fcount} followers</span>
       </div>
     `;
@@ -977,44 +1114,76 @@ async function loadLeaderboard() {
 }
 
 // ---- HOME FEED ----
-async function loadHomeFeeed() {
-  const { data } = await db.from('fb_comments').select('*').order('created_at',{ascending:false}).limit(30);
+async function loadHomeFeed() {
   const el = document.getElementById('home-feed');
-  if (!data || !data.length) { el.innerHTML = '<div class="center">No activity yet. Be the first!</div>'; return; }
-
-  // Also get recent users
-  const { data: newUsers } = await db.from('fb_users').select('id,username,avatar,tag,created_at').order('created_at',{ascending:false}).limit(5);
+  const [{ data: comments }, { data: newUsers }] = await Promise.all([
+    db.from('fb_comments').select('*').order('created_at',{ascending:false}).limit(30),
+    db.from('fb_users').select('id,username,avatar,tag,created_at').order('created_at',{ascending:false}).limit(5)
+  ]);
 
   let html = '';
   if (newUsers && newUsers.length) {
     html += `<div style="margin-bottom:16px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:10px">New Members</div>`;
     html += newUsers.map(u => `
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="showPage('profile','${u.id}')">
-        <img style="width:32px;height:32px;border-radius:3px;object-fit:cover;background:#1a1a1a" src="${u.avatar||''}" onerror="this.src='data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'32\' height=\'32\'><rect width=\'32\' height=\'32\' fill=\'%231a1a1a\'/></svg>'">
-        <span style="color:var(--accent2)">${escHtml(u.username)}</span>${rareBadge(u.username)}
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="navigateTo('${u.username}')">
+        <img style="width:32px;height:32px;border-radius:3px;object-fit:cover;background:#1a1a1a" src="${u.avatar||blankAvatar(32)}" onerror="this.src='${blankAvatar(32)}'">
+        <div>
+          <span style="color:var(--accent2)">${escHtml(u.username)}</span>${rareBadge(u.username)}
+          <span style="color:var(--muted);font-size:10px;margin-left:8px">cursed.lat/${escHtml(u.username)}</span>
+        </div>
         <span style="color:var(--muted);font-size:10px;margin-left:auto">${timeAgo(u.created_at)}</span>
       </div>
     `).join('');
     html += `</div>`;
   }
 
-  html += `<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:10px">Recent Comments</div>`;
-  html += data.map(c => `
-    <div class="comment">
-      <div class="comment-header">
-        <img class="comment-avatar" src="${c.author_avatar||''}" onerror="this.src=''" onclick="showPage('profile','${c.author_id}')">
-        <span class="comment-user" onclick="showPage('profile','${c.author_id}')">${escHtml(c.author_username)}</span>
-        <span style="color:var(--muted);font-size:11px">→</span>
-        <span style="color:var(--text);font-size:11px;cursor:pointer" onclick="showPage('profile','${c.user_id}')">${c.user_id}</span>
-        <span class="comment-time">${timeAgo(c.created_at)}</span>
-      </div>
-      <div class="comment-body">${escHtml(c.body)}</div>
-    </div>
-  `).join('');
+  if (comments && comments.length) {
+    html += `<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:10px">Recent Comments</div>`;
+    html += comments.map(async c => {
+      // Get recipient username
+      const { data: recipient } = await db.from('fb_users').select('username').eq('id', c.user_id).maybeSingle();
+      return `
+        <div class="comment">
+          <div class="comment-header">
+            <img class="comment-avatar" src="${c.author_avatar||blankAvatar(28)}" onerror="this.src='${blankAvatar(28)}'" onclick="navigateTo('${c.author_username}')">
+            <span class="comment-user" onclick="navigateTo('${c.author_username}')">${escHtml(c.author_username)}</span>
+            <span style="color:var(--muted);font-size:11px">→</span>
+            <span style="color:var(--text);font-size:11px;cursor:pointer" onclick="navigateTo('${recipient?.username || ''}')">${escHtml(recipient?.username || '...')}</span>
+            <span class="comment-time">${timeAgo(c.created_at)}</span>
+          </div>
+          <div class="comment-body">${escHtml(c.body)}</div>
+        </div>
+      `;
+    });
+    // Resolve async maps
+    const resolved = await Promise.all(comments.map(async c => {
+      const { data: recipient } = await db.from('fb_users').select('username').eq('id', c.user_id).maybeSingle();
+      return `
+        <div class="comment">
+          <div class="comment-header">
+            <img class="comment-avatar" src="${c.author_avatar||blankAvatar(28)}" onerror="this.src='${blankAvatar(28)}'" onclick="navigateTo('${c.author_username}')">
+            <span class="comment-user" onclick="navigateTo('${c.author_username}')">${escHtml(c.author_username)}</span>
+            <span style="color:var(--muted);font-size:11px;margin:0 4px">→</span>
+            <span style="color:var(--text);font-size:11px;cursor:pointer" onclick="navigateTo('${recipient?.username || ''}')">${escHtml(recipient?.username || '?')}</span>
+            <span class="comment-time">${timeAgo(c.created_at)}</span>
+          </div>
+          <div class="comment-body">${escHtml(c.body)}</div>
+        </div>
+      `;
+    }));
+    html += resolved.join('');
+  } else if (!newUsers?.length) {
+    html = '<div class="center">No activity yet. Be the first!</div>';
+  }
+
   el.innerHTML = html;
 }
 
 // ---- HELPERS ----
+function blankAvatar(size) {
+  return `data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}'><rect width='${size}' height='${size}' fill='%231a1a1a'/><text x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23444' font-size='${Math.round(size*0.4)}'>?</text></svg>`;
+}
+
 function escHtml(s) {
   if (!s) return '';
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
