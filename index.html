@@ -413,27 +413,7 @@
   .flex { display: flex; gap: 12px; align-items: center; }
   .ml-auto { margin-left: auto; }
 
-  /* URL SHARE ROW */
-  .url-share {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: #0d0d0d;
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    padding: 8px 12px;
-    font-size: 11px;
-    color: var(--accent);
-    letter-spacing: 1px;
-    margin-top: 8px;
-    cursor: pointer;
-    user-select: none;
-    transition: border-color .15s;
-  }
-  .url-share:hover { border-color: var(--accent); }
-  .url-share span { flex: 1; font-family: 'Share Tech Mono', monospace; }
-  .url-share .copy-icon { color: var(--muted); font-size: 10px; }
-  .url-share:hover .copy-icon { color: var(--accent); }
+
 </style>
 </head>
 <body>
@@ -598,11 +578,7 @@
           <span onclick="showFollowModal('following')"><b id="profile-following">0</b> Following</span>
           <span onclick="showFollowModal('followers')"><b id="profile-followers">0</b> Followers</span>
         </div>
-        <!-- URL share row -->
-        <div class="url-share" id="profile-url-share" onclick="copyProfileLink()">
-          <span id="profile-url-text">cursed.lat/</span>
-          <span class="copy-icon">[ copy ]</span>
-        </div>
+
       </div>
       <div class="profile-actions" id="profile-actions"></div>
     </div>
@@ -612,7 +588,6 @@
       <div class="info-table">
         <div class="info-row"><span class="info-label">UID</span><span class="info-value" id="pinfo-uid">—</span></div>
         <div class="info-row"><span class="info-label">Username</span><span class="info-value" id="pinfo-user">—</span></div>
-        <div class="info-row"><span class="info-label">Profile URL</span><span class="info-value" id="pinfo-url">—</span></div>
         <div class="info-row"><span class="info-label">Joined</span><span class="info-value" id="pinfo-joined">—</span></div>
         <div class="info-row"><span class="info-label">Followers</span><span class="info-value" id="pinfo-followers">—</span></div>
       </div>
@@ -651,11 +626,8 @@ let allUsers = [];
 async function init() {
   loadSession();
   updateNavUser();
-  loadHomeFeed();
-  loadUsers();
-  loadLeaderboard();
-  // Route based on current URL path
-  routePath(window.location.pathname, false);
+  // Route based on current URL path - this handles /username URLs
+  await routePath(window.location.pathname, false);
 }
 
 function loadSession() {
@@ -668,8 +640,6 @@ function loadSession() {
 async function navigateTo(slug, pushState = true) {
   slug = (slug || '').toLowerCase().replace(/^\//, '').split('?')[0].split('#')[0].trim();
 
-  const pages = ['', 'home', 'claim', 'users', 'leaderboard'];
-
   if (slug === '' || slug === 'home') {
     _showRawPage('home');
     if (pushState) history.pushState({}, '', '/');
@@ -678,12 +648,26 @@ async function navigateTo(slug, pushState = true) {
     return;
   }
 
-  if (pages.includes(slug)) {
-    _showRawPage(slug);
-    if (pushState) history.pushState({}, '', `/${slug}`);
-    document.title = `cursed.lat — ${slug}`;
-    if (slug === 'users') loadUsers();
-    if (slug === 'leaderboard') loadLeaderboard();
+  if (slug === 'claim') {
+    _showRawPage('claim');
+    if (pushState) history.pushState({}, '', '/claim');
+    document.title = 'cursed.lat — claim';
+    return;
+  }
+
+  if (slug === 'users') {
+    _showRawPage('users');
+    if (pushState) history.pushState({}, '', '/users');
+    document.title = 'cursed.lat — users';
+    loadUsers();
+    return;
+  }
+
+  if (slug === 'leaderboard') {
+    _showRawPage('leaderboard');
+    if (pushState) history.pushState({}, '', '/leaderboard');
+    document.title = 'cursed.lat — leaderboard';
+    loadLeaderboard();
     return;
   }
 
@@ -708,9 +692,9 @@ function _showRawPage(name) {
   if (el) el.classList.add('active');
 }
 
-function routePath(path, pushState) {
+async function routePath(path, pushState) {
   const slug = (path || '/').replace(/^\//, '').split('?')[0].split('#')[0].trim();
-  navigateTo(slug, pushState);
+  await navigateTo(slug, pushState);
 }
 
 window.addEventListener('popstate', () => routePath(window.location.pathname, false));
@@ -847,11 +831,6 @@ async function loadProfile(userId) {
     history.pushState({ username: user.username }, '', `/${user.username}`);
     document.title = `cursed.lat/${user.username}`;
   }
-
-  // Profile URL display
-  const profileUrl = `${SITE_HOST}/${user.username}`;
-  document.getElementById('profile-url-text').textContent = `cursed.lat/${user.username}`;
-  document.getElementById('pinfo-url').textContent = `cursed.lat/${user.username}`;
 
   document.getElementById('profile-username').textContent = user.username;
   document.getElementById('profile-tag').textContent = user.tag || '';
